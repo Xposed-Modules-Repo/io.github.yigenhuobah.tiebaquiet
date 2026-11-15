@@ -2,13 +2,16 @@
 
 基于 [libxposed API 102](https://repo.maven.apache.org/maven2/io/github/libxposed/) 的 LSPosed 模块，为百度贴吧（`com.baidu.tieba`）提供去广告、界面精简、功能增强与隐私保护。
 
-- 模块版本：**0.3.6**（versionCode 10）
-- 目标版本：百度贴吧 **22.13.1.1**（versionCode 369950981）
+- 模块版本：**0.3.9**（versionCode 13）
+- 目标版本：百度贴吧 **22.14.1.0**（versionCode 370016512）
 - 包名：`io.github.yigenhuobah.tiebaquiet`
 - 运行环境：LSPosed 2.1+ / Vector 2.2+（Zygisk），API 102
-- 仓库：<https://github.com/yigenhuobah/tiebaquiet> ｜ 反馈：[Issues](https://github.com/yigenhuobah/tiebaquiet/issues/new/choose)
+- 主平台：[CodeFloe](https://codefloe.com/quiet-tools/tiebaquiet) ｜ 项目主页：[quiet-tools.codefloe.page](https://quiet-tools.codefloe.page/) ｜ 反馈：[Issues](https://codefloe.com/quiet-tools/tiebaquiet/issues/new) ｜ 通知：[Telegram](https://t.me/yigenhuobah)
 
 更新日志见 [CHANGELOG.md](CHANGELOG.md)。
+
+> 源码、Issues 与 Releases 已迁移到 CodeFloe；GitHub 官方 Xposed 镜像保留旧版本，恢复后同步。
+
 
 ## 功能
 
@@ -70,7 +73,7 @@
 - **框架已连接**：作用域已勾选，但贴吧进程当前未注入（启动贴吧后生效）
 - **已激活**：贴吧进程已注入，显示框架 API 版本
 
-异常横幅只在两种情况下出现：贴吧版本不是 22.13.1.1，或已启用且明确失败的功能数 ≥ 2。框架未绑定时开关置灰，避免“改了没用”。设置页末尾提供「恢复默认」：二次确认后写入全部默认值、清理旧 group 键并回读校验，失败会明确提示。
+异常横幅只在两种情况下出现：贴吧版本不是 22.14.1.0，或已启用且明确失败的功能数 ≥ 2。框架未绑定时开关置灰，避免“改了没用”。设置页末尾提供「恢复默认」：二次确认后写入全部默认值、清理旧 group 键并回读校验，失败会明确提示。
 
 ## 诊断与关于
 
@@ -79,11 +82,11 @@
 
 ## 安装
 
-1. 从 [Releases](https://github.com/yigenhuobah/tiebaquiet/releases) 下载最新 APK 安装。
+1. 从 [Releases](https://codefloe.com/quiet-tools/tiebaquiet/releases) 下载最新 APK 安装。
 2. 在 LSPosed 管理器中启用「贴吧静净」，作用域勾选「百度贴吧」。
 3. 强制停止并重新打开贴吧。
 
-要求：LSPosed 2.1+ / Vector 2.2+（Zygisk），libxposed API 102；百度贴吧 22.13.1.1。
+要求：LSPosed 2.1+ / Vector 2.2+（Zygisk），libxposed API 102；百度贴吧 22.14.1.0。
 
 ## 构建
 
@@ -101,7 +104,7 @@
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --no-daemon
 ```
 
-当前共 **205 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
+当前共 **317 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
 
 本地预检：`bash tools/preflight.sh`；锚点体检：`bash tools/check-mounts.sh --apk <贴吧apk>`（缺省自动探测；无 DexSQL 时进入降级模式、只校验锚点表完整性并以 2 退出；确需放行时显式加 `--allow-degraded`）。
 
@@ -130,8 +133,8 @@ python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/an
 
 | 宿主版本 | 状态 | 说明 |
 |---|---|---|
-| 22.13.1.1（369950981） | 已适配 | 当前声明版本；锚点表 61 个方法 + 2 个字段 + 13 个类 |
-| 22.12.1.0（369885440） | 历史适配，不再保证 | 0.3.0 及以前使用；22.13.1.1 混淆名大洗牌后需重新生成锚点 |
+| 22.14.1.0（370016512） | 已适配 | 当前声明版本；锚点表 61 个方法 + 2 个字段 + 13 个类，静态体检 63/63 + 13/13 |
+| 22.13.1.1（369950981） | 历史适配，不再保证 | 0.3.6 及以前使用；22.14.1.0 混淆名再次洗牌后需重新生成锚点 |
 
 - 仅声明支持表中「已适配」版本；混淆类（`fz8` 等）通过字符串锚点在 `gen_anchors.py` 中定位，跨版本需重新生成。
 - 贴吧业务方法普遍带 Titan 热修桩（`$ic`）。模块遵循：优先 replace/after，before 不 return，不 hook clinit/构造器。
@@ -139,11 +142,12 @@ python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/an
 - “启动任务精简”曾 hook `LaunchTask.run()`，但它是所有启动任务的模板方法，跳过会导致 Fresco 图片管线未初始化、贴吧启动即闪退，已移除。
 - 修改开关后需要强制停止并重新打开贴吧生效（RemotePreferences 在进程启动时读取）。
 
-### 已知限制（0.3.6）
+### 已知限制（0.3.9）
 
-- **22.13.1.1 锚点已重生成，未逐项真机复验**：2026-10-31 基于 22.13.1.1（versionCode 369950981）APK 重新定位 14 处混淆锚点并重生成 anchors.json（55 方法 + 7 类全命中，0 MISSING）；功能行为未逐项真机回归。2026-11-01 追加 UI-03 注入链 `k()`/`getInnerWebView`（`person_tab_web_k`/`tbwebview_inner`）。2026-11-06 追加 FRS/吧内插入直播卡 `frs_insert_live_bind`（`z88#s`）与信息流语音房/开播推荐卡 `voice_room_card_bind`（`CardFeedVoiceRoomView#v`），当前 61 方法 + 2 字段 + 13 类；`gen_anchors.py` 已用 22.13.1.1 APK + dexsql 全量重生成校验，0 MISSING。
-- **FRS/吧内插入直播卡（AD-05）**：0.3.3–0.3.5 未覆盖这条链路（`v88`/`t2f` 在 22.13.1.1 已改名）；0.3.6 已补 `frs_insert_live_bind`（`z88#s`），仍待真机复验。
-- **信息流语音房/开播推荐卡（AD-05）**：issue #3 截图里的卡片由 `CardFeedVoiceRoomView` 渲染；源码已补 `voice_room_card_bind`（`CardFeedVoiceRoomView#v`），绑定后隐藏整卡，待下一版真机验证。
+- **安装包签名校验**：启动时核对 APK 签名证书与内置指纹；签名不符会首次启动警告一次（不阻断功能）。该校验只能提示二次打包，恶意修改仍可移除，请优先从 CodeFloe Releases / Telegram 频道下载。
+- **22.14.1.0 锚点已重生成，已完成真机冒烟、未逐项回归**：2026-11-14 基于 22.14.1.0（versionCode 370016512）APK 全量重定位 22 个锚点/类（16 个方法锚点 + 6 个类锚点，20 个 c/m/s 值变更），当前 61 方法 + 2 字段 + 13 类，`check-mounts.sh` 63/63 + 13/13、0 MISSING；真机 `ready: 14 installed, 0 skipped, target=22.14.1.0`，功能行为未逐项真机回归。
+- **FRS/吧内插入直播卡（AD-05）**：22.14.1.0 上由 `z88#s` 迁到 `a98#s`（参数 `v4f` → `c7f`），绑定后隐藏整卡；真机已确认锚点注册、AD-05 命中 `template_set_list`，尚未用可复现的 FRS/吧内插入直播卡确认过滤效果。
+- **信息流语音房/开播推荐卡（AD-05）**：issue #3 截图里的卡片由 `CardFeedVoiceRoomView#v` 渲染，22.14.1.0 参数由 `le9` → `re9`；绑定后隐藏整卡，真机已确认锚点注册，过滤效果仍需可复现卡片确认。
 
 - **一键签到需 EN-08 开启**：关闭 EN-08 时接收器忽略签到广播，设置页按钮提示“请先开启”；点击按钮不再静默改写开关。
 - **签到页可打开，但本账号无法完成签到**：2026-10-29 真机（0.2.1）已触发并打开贴吧签到页；页面提示「吧内等级 7 级以上才可使用」，当前账号各吧为 1–6 级，因此没有实际完成签到。这是贴吧的账号等级门槛，不是模块失败。
