@@ -2,7 +2,7 @@
 
 基于 [libxposed API 102](https://repo.maven.apache.org/maven2/io/github/libxposed/) 的 LSPosed 模块，为百度贴吧（`com.baidu.tieba`）提供去广告、界面精简、功能增强与隐私保护。
 
-- 模块版本：**0.3.9**（versionCode 13）
+- 模块版本：**0.3.10**（versionCode 14）
 - 目标版本：百度贴吧 **22.14.1.0**（versionCode 370016512）
 - 包名：`io.github.yigenhuobah.tiebaquiet`
 - 运行环境：LSPosed 2.1+ / Vector 2.2+（Zygisk），API 102
@@ -104,7 +104,7 @@
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --no-daemon
 ```
 
-当前共 **317 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
+当前共 **364 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
 
 本地预检：`bash tools/preflight.sh`；锚点体检：`bash tools/check-mounts.sh --apk <贴吧apk>`（缺省自动探测；无 DexSQL 时进入降级模式、只校验锚点表完整性并以 2 退出；确需放行时显式加 `--allow-degraded`）。
 
@@ -142,12 +142,14 @@ python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/an
 - “启动任务精简”曾 hook `LaunchTask.run()`，但它是所有启动任务的模板方法，跳过会导致 Fresco 图片管线未初始化、贴吧启动即闪退，已移除。
 - 修改开关后需要强制停止并重新打开贴吧生效（RemotePreferences 在进程启动时读取）。
 
-### 已知限制（0.3.9）
+### 已知限制（0.3.10）
 
 - **安装包签名校验**：启动时核对 APK 签名证书与内置指纹；签名不符会首次启动警告一次（不阻断功能）。该校验只能提示二次打包，恶意修改仍可移除，请优先从 CodeFloe Releases / Telegram 频道下载。
 - **22.14.1.0 锚点已重生成，已完成真机冒烟、未逐项回归**：2026-11-14 基于 22.14.1.0（versionCode 370016512）APK 全量重定位 22 个锚点/类（16 个方法锚点 + 6 个类锚点，20 个 c/m/s 值变更），当前 61 方法 + 2 字段 + 13 类，`check-mounts.sh` 63/63 + 13/13、0 MISSING；真机 `ready: 14 installed, 0 skipped, target=22.14.1.0`，功能行为未逐项真机回归。
+- **AD-05 直播卡过滤**：sweep 的 `BdRecyclerAdapter` 解包已修复并实机验证（`feed_sweep` registered、无 adapter mismatch），但实机仍观察到部分直播卡未被隐藏，视图锚点/卡片类型覆盖待补。
 - **FRS/吧内插入直播卡（AD-05）**：22.14.1.0 上由 `z88#s` 迁到 `a98#s`（参数 `v4f` → `c7f`），绑定后隐藏整卡；真机已确认锚点注册、AD-05 命中 `template_set_list`，尚未用可复现的 FRS/吧内插入直播卡确认过滤效果。
 - **信息流语音房/开播推荐卡（AD-05）**：issue #3 截图里的卡片由 `CardFeedVoiceRoomView#v` 渲染，22.14.1.0 参数由 `le9` → `re9`；绑定后隐藏整卡，真机已确认锚点注册，过滤效果仍需可复现卡片确认。
+- **AD-06 实时热点卡过滤**：sweep 已生效，但本次没有热点卡样本，实际隐藏未验证。
 
 - **一键签到需 EN-08 开启**：关闭 EN-08 时接收器忽略签到广播，设置页按钮提示“请先开启”；点击按钮不再静默改写开关。
 - **签到页可打开，但本账号无法完成签到**：2026-10-29 真机（0.2.1）已触发并打开贴吧签到页；页面提示「吧内等级 7 级以上才可使用」，当前账号各吧为 1–6 级，因此没有实际完成签到。这是贴吧的账号等级门槛，不是模块失败。
