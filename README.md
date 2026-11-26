@@ -2,8 +2,8 @@
 
 基于 [libxposed API 102](https://repo.maven.apache.org/maven2/io/github/libxposed/) 的 LSPosed 模块，为百度贴吧（`com.baidu.tieba`）提供去广告、界面精简、功能增强与隐私保护。
 
-- 模块版本：**0.3.10**（versionCode 14）
-- 目标版本：百度贴吧 **22.14.1.0**（versionCode 370016512）
+- 模块版本：**0.3.11**（versionCode 15）
+- 目标版本：百度贴吧 **22.15.1.1**（versionCode 370082053）
 - 包名：`io.github.yigenhuobah.tiebaquiet`
 - 运行环境：LSPosed 2.1+ / Vector 2.2+（Zygisk），API 102
 - 主平台：[CodeFloe](https://codefloe.com/quiet-tools/tiebaquiet) ｜ 项目主页：[quiet-tools.codefloe.page](https://quiet-tools.codefloe.page/) ｜ 反馈：[Issues](https://codefloe.com/quiet-tools/tiebaquiet/issues/new) ｜ 通知：[Telegram](https://t.me/yigenhuobah)
@@ -114,37 +114,50 @@
 
 - `TiebaQuietModule`：libxposed 入口，仅注入贴吧主进程；安装完成后启动诊断回传。
 - `Feature` / `FeatureRegistry`：25 个功能的编号、remote key、文案、默认值、分组与安装器。
-- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（当前 61 个方法锚点 + 2 个字段锚点 + 13 个类锚点），运行时反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
+- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（63 个方法/字段锚点 + 13 个类锚点，另含 22.15.1.1 的 18 个方法变体与 4 个类变体），按宿主版本选择 profile 后反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
+- `FeatureAnchors` / `ProfileAvailability`：`feature_anchors.json` 声明每个功能依赖的 mount id；设置页据此把当前宿主版本缺少挂载点的功能置灰，并在选版未命中时显示未适配横幅。
 - `feature/phase1|2|3`：各功能的 hook 安装器；`CardFilter` / `FeedCardSweeper` 为信息流过滤公共逻辑。
 - `Config` / `ConfigStore` / `ConfigMigration`：目标进程读、模块 App 写，新分组 `config` 优先、旧分组 `features` 兜底。
 - `ServiceBridge`：XposedService 绑定、占位 binder 过滤与 remote prefs 获取。
 - `HookState` / `hooks/Report` / `StatusProvider`：目标进程每 3 秒检查注册/命中/跳过状态，内容变化才回传、不变时每 5 分钟心跳；模块 App 侧校验 UID 后同步 `commit()` 落盘，并按会话标识、10 分钟 TTL 与 critical 标记供诊断页和失败横幅读取。
-- `tools/gen_anchors.py`：构建期用 [DexSQL](https://github.com/LSPosed/dexsql-release) 校验全部锚点并生成 `anchors.json`。
+- `tools/gen_anchors.py`：构建期用 [DexSQL](https://github.com/LSPosed/dexsql-release) 校验所选 profile 的锚点，并生成 `AnchorKeys.java` / `FeatureAnchors.java`；`anchors.json` 是唯一事实来源。
 
-贴吧更新后：
+贴吧更新后：先更新 `anchors.json` 的变体与 profile，再跑：
 
 ```bash
-python tools/gen_anchors.py --apk <新版本apk> --out app/src/main/resources/anchors.json
+python tools/gen_anchors.py --apk <新版本apk> --version <新versionCode>
+python tools/gen_anchors.py --apk <新版本apk> --version <新versionCode> --check
 ```
 
 锚点未命中的功能会在日志中标记为 skipped，其余功能继续工作。
 
 ## 兼容性与风险
 
+多版本锚点表：`anchors.json` 的 `profiles` 声明已适配版本，每个 profile 只增量挂载发生变化的锚点；运行时按宿主 versionCode 精确选版，未收录版本回退最新 profile（fail-open，日志 WARN）。
+
+<!-- BEGIN:VERSION_MATRIX -->
+| 宿主版本 | versionCode | 状态 | 可用功能数 | 缺失功能 |
+| --- | --- | --- | --- | --- |
+| 22.14.1.0 | 370016512 | 冻结 | 25 | — |
+| 22.15.1.1 | 370082053 | 最新 | 25 | — |
+<!-- END:VERSION_MATRIX -->
+
 | 宿主版本 | 状态 | 说明 |
 |---|---|---|
-| 22.14.1.0（370016512） | 已适配 | 当前声明版本；锚点表 61 个方法 + 2 个字段 + 13 个类，静态体检 63/63 + 13/13 |
-| 22.13.1.1（369950981） | 历史适配，不再保证 | 0.3.6 及以前使用；22.14.1.0 混淆名再次洗牌后需重新生成锚点 |
+| 22.15.1.1（370082053） | 已适配（最新） | 18 个方法锚点 + 4 个类锚点重定位；静态体检 0 SIG / 0 GONE |
+| 22.14.1.0（370016512） | 已适配（冻结） | 基线 profile，`tools/profile-locks.json` 锁定展开结果 |
+| 22.13.1.1（369950981） | 历史适配，不再保证 | 0.3.6 及以前使用；22.14.1.0 混淆名洗牌后需重新生成锚点 |
 
-- 仅声明支持表中「已适配」版本；混淆类（`fz8` 等）通过字符串锚点在 `gen_anchors.py` 中定位，跨版本需重新生成。
+- 仅声明支持表中列出的版本；混淆类（`fz8` 等）通过语义锚点在 `anchors.json` 中定位，跨版本只新增变体，不覆写已冻结 profile。
 - 贴吧业务方法普遍带 Titan 热修桩（`$ic`）。模块遵循：优先 replace/after，before 不 return，不 hook clinit/构造器。
 - 已知暴露面：贴吧内置 sofire/weapon 等检测会随请求上报 Xposed 环境特征；本模块不做任何检测绕过，只减少主动触碰（不 hook 框架方法、不碰签名/发送层、不做设备号伪造）。
 - “启动任务精简”曾 hook `LaunchTask.run()`，但它是所有启动任务的模板方法，跳过会导致 Fresco 图片管线未初始化、贴吧启动即闪退，已移除。
 - 修改开关后需要强制停止并重新打开贴吧生效（RemotePreferences 在进程启动时读取）。
 
-### 已知限制（0.3.10）
+### 已知限制（0.3.11）
 
 - **安装包签名校验**：启动时核对 APK 签名证书与内置指纹；签名不符会首次启动警告一次（不阻断功能）。该校验只能提示二次打包，恶意修改仍可移除，请优先从 CodeFloe Releases / Telegram 频道下载。
+- **22.15.1.1 锚点已按 DexSQL 重定位**：18 个方法锚点 + 4 个类锚点以 `@22.15.1.1` 变体增量挂载，`check-mounts.sh` 静态体检 0 SIG / 0 GONE；本轮未对 22.15.1.1 做真机逐项回归。
 - **22.14.1.0 锚点已重生成，已完成真机冒烟、未逐项回归**：2026-11-14 基于 22.14.1.0（versionCode 370016512）APK 全量重定位 22 个锚点/类（16 个方法锚点 + 6 个类锚点，20 个 c/m/s 值变更），当前 61 方法 + 2 字段 + 13 类，`check-mounts.sh` 63/63 + 13/13、0 MISSING；真机 `ready: 14 installed, 0 skipped, target=22.14.1.0`，功能行为未逐项真机回归。
 - **AD-05 直播卡过滤**：sweep 的 `BdRecyclerAdapter` 解包已修复并实机验证（`feed_sweep` registered、无 adapter mismatch），但实机仍观察到部分直播卡未被隐藏，视图锚点/卡片类型覆盖待补。
 - **FRS/吧内插入直播卡（AD-05）**：22.14.1.0 上由 `z88#s` 迁到 `a98#s`（参数 `v4f` → `c7f`），绑定后隐藏整卡；真机已确认锚点注册、AD-05 命中 `template_set_list`，尚未用可复现的 FRS/吧内插入直播卡确认过滤效果。
