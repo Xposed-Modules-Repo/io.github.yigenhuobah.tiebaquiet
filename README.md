@@ -2,7 +2,7 @@
 
 基于 [libxposed API 102](https://repo.maven.apache.org/maven2/io/github/libxposed/) 的 LSPosed 模块，为百度贴吧（`com.baidu.tieba`）提供去广告、界面精简、功能增强与隐私保护。
 
-- 模块版本：**0.3.11**（versionCode 15）
+- 模块版本：**0.3.12**（versionCode 18）
 - 目标版本：百度贴吧 **22.15.1.1**（versionCode 370082053）
 - 包名：`io.github.yigenhuobah.tiebaquiet`
 - 运行环境：LSPosed 2.1+ / Vector 2.2+（Zygisk），API 102
@@ -62,7 +62,7 @@
 | EN-07 | 视频直链复制 | 播放视频时自动复制直链到剪贴板 |
 | EN-08 | 一键签到 | 设置页按钮触发贴吧自带的全部吧签到 |
 
-默认值只影响新安装；已保存的开关不会被覆盖。旧版本写在 `features` 分组中的配置会继续读取，新版本写入 `config` 分组并同时回写旧分组一个版本。
+默认值只影响新安装；已保存的开关不会被覆盖。旧版本写在 `features` 分组中的配置会继续读取，并在首次绑定后一次性迁移到 `config` 分组；新版本只写 `config`，不再双写旧分组。旧分组保留一个版本供降级回滚，读取顺序为 `config` → `features` → 默认值。
 
 ## 设置页状态
 
@@ -104,7 +104,7 @@
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --no-daemon
 ```
 
-当前共 **364 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
+当前共 **451 个 JVM 单测**（`app/src/test`），CI 在 push 到 main 和 PR 时运行单测与 lint。
 
 本地预检：`bash tools/preflight.sh`；锚点体检：`bash tools/check-mounts.sh --apk <贴吧apk>`（缺省自动探测；无 DexSQL 时进入降级模式、只校验锚点表完整性并以 2 退出；确需放行时显式加 `--allow-degraded`）。
 
@@ -114,10 +114,11 @@
 
 - `TiebaQuietModule`：libxposed 入口，仅注入贴吧主进程；安装完成后启动诊断回传。
 - `Feature` / `FeatureRegistry`：25 个功能的编号、remote key、文案、默认值、分组与安装器。
-- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（63 个方法/字段锚点 + 13 个类锚点，另含 22.15.1.1 的 18 个方法变体与 4 个类变体），按宿主版本选择 profile 后反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
-- `FeatureAnchors` / `ProfileAvailability`：`feature_anchors.json` 声明每个功能依赖的 mount id；设置页据此把当前宿主版本缺少挂载点的功能置灰，并在选版未命中时显示未适配横幅。
+- `anchor/AnchorTable`：读取打包进 APK 的 `anchors.json`（63 个方法/字段锚点 + 13 个类锚点，另含 22.15.1.1 的 25 个方法变体与 4 个类变体），按宿主版本选择 profile 后反射校验类/方法是否存在；缺失时只禁用对应功能，版本不匹配只告警不阻断。
+- `FeatureAnchors` / `ProfileAvailability`：`feature_anchors.json` 声明每个功能依赖的 mount id（多个功能可共享同一 mount）；设置页据此把当前宿主版本缺少挂载点的功能置灰，并在选版未命中时显示未适配横幅。`ProfileAvailability` 已上收到 core-android，模块只保留 `Feature.requiredAnchors()` 投影。
 - `feature/phase1|2|3`：各功能的 hook 安装器；`CardFilter` / `FeedCardSweeper` 为信息流过滤公共逻辑。
-- `Config` / `ConfigStore` / `ConfigMigration`：目标进程读、模块 App 写，新分组 `config` 优先、旧分组 `features` 兜底。
+- `feature/BdWrapperMembers` + `bd_wrapper_candidates.json`：BdRecyclerAdapter/BdRecyclerView 的成员规格。22.15.1.1 已用真实 APK 的 dexsql 核对（`getWrappedAdapter()` → `L()` → 字段 `c`；`getHeaderViewsCount()` → `K()` → `pf.i()`），并以 `@22.15.1.1` variant-only 锚点收编进 `anchors.json` 的 22.15.1.1 profile；运行时经 `AnchorTable` 解析。22.14.1.0 仍无本仓可用的 dex 证据，继续按 22.12 候选名 duck-typing 并输出诊断。`bd_wrapper_candidates.json` 只是文档化副本，不是运行时输入。
+- `Config` / `ConfigStore` / `ConfigMigration`：目标进程读、模块 App 写；新写入只写 `config`，首次绑定后按 feature 一次性迁移旧 `features` 值（durable `config_migration_v1` 标记），读取按 `config` → `features` → 默认值兜底一个版本。
 - `ServiceBridge`：XposedService 绑定、占位 binder 过滤与 remote prefs 获取。
 - `HookState` / `hooks/Report` / `StatusProvider`：目标进程每 3 秒检查注册/命中/跳过状态，内容变化才回传、不变时每 5 分钟心跳；模块 App 侧校验 UID 后同步 `commit()` 落盘，并按会话标识、10 分钟 TTL 与 critical 标记供诊断页和失败横幅读取。
 - `tools/gen_anchors.py`：构建期用 [DexSQL](https://github.com/LSPosed/dexsql-release) 校验所选 profile 的锚点，并生成 `AnchorKeys.java` / `FeatureAnchors.java`；`anchors.json` 是唯一事实来源。
@@ -144,7 +145,7 @@ python tools/gen_anchors.py --apk <新版本apk> --version <新versionCode> --ch
 
 | 宿主版本 | 状态 | 说明 |
 |---|---|---|
-| 22.15.1.1（370082053） | 已适配（最新） | 18 个方法锚点 + 4 个类锚点重定位；静态体检 0 SIG / 0 GONE |
+| 22.15.1.1（370082053） | 已适配（最新） | 18 个方法锚点 + 4 个类锚点重定位，另新增 7 个 variant-only 运行时锚点（4 个 Bd wrapper 成员 + 3 个 AD-05 binder 补漏）；静态体检 83/83、0 SIG / 0 GONE |
 | 22.14.1.0（370016512） | 已适配（冻结） | 基线 profile，`tools/profile-locks.json` 锁定展开结果 |
 | 22.13.1.1（369950981） | 历史适配，不再保证 | 0.3.6 及以前使用；22.14.1.0 混淆名洗牌后需重新生成锚点 |
 
@@ -157,11 +158,12 @@ python tools/gen_anchors.py --apk <新版本apk> --version <新versionCode> --ch
 ### 已知限制（0.3.11）
 
 - **安装包签名校验**：启动时核对 APK 签名证书与内置指纹；签名不符会首次启动警告一次（不阻断功能）。该校验只能提示二次打包，恶意修改仍可移除，请优先从 CodeFloe Releases / Telegram 频道下载。
-- **22.15.1.1 锚点已按 DexSQL 重定位**：18 个方法锚点 + 4 个类锚点以 `@22.15.1.1` 变体增量挂载，`check-mounts.sh` 静态体检 0 SIG / 0 GONE；本轮未对 22.15.1.1 做真机逐项回归。
+- **22.15.1.1 锚点已按 DexSQL 重定位并补齐**：18 个方法锚点 + 4 个类锚点以 `@22.15.1.1` 变体增量挂载，另新增 7 个 variant-only 锚点（4 个 Bd wrapper 成员 + 3 个 AD-05 feed binder 补漏），`check-mounts.sh` 83/83、0 SIG / 0 GONE；本轮未对 22.15.1.1 做真机逐项回归。
 - **22.14.1.0 锚点已重生成，已完成真机冒烟、未逐项回归**：2026-11-14 基于 22.14.1.0（versionCode 370016512）APK 全量重定位 22 个锚点/类（16 个方法锚点 + 6 个类锚点，20 个 c/m/s 值变更），当前 61 方法 + 2 字段 + 13 类，`check-mounts.sh` 63/63 + 13/13、0 MISSING；真机 `ready: 14 installed, 0 skipped, target=22.14.1.0`，功能行为未逐项真机回归。
-- **AD-05 直播卡过滤**：sweep 的 `BdRecyclerAdapter` 解包已修复并实机验证（`feed_sweep` registered、无 adapter mismatch），但实机仍观察到部分直播卡未被隐藏，视图锚点/卡片类型覆盖待补。
+- **AD-05 直播卡过滤**：sweep 的 `BdRecyclerAdapter` 解包在 22.14 实机验证（`feed_sweep` registered、无 adapter mismatch）。22.15.1.1 的 `L/K/getWrappedAdapter/getHeaderViewsCount` 已用真实 APK dex 核对并收编进 anchors profile；22.14 仍按候选名 duck-typing（`bd_wrapper_candidates.json` 保持 unverified）。新增的 22.15.1.1 binder 锚点覆盖 `live`/`live_card`/`side_voice_room` 三种模板，其中 `side_voice_room` 不含 live token，是旧 token 白名单的确定漏网；`feed_voice`（`CardPlayVoiceView`）因无法证明是直播/语音房卡而未收编，留作候选。
+- **AD-05 binder 隐藏未真机复用验证**：22.15.1.1 的 `feed_live_bind`/`feed_live_card_bind`/`side_voice_room_bind` 只完成 dex 锚点核对与 JVM 状态机测试（binder 先隐藏、sweep 后隐藏不会覆盖 `OriginalState`）；设备在拉取 APK 后已断连，本轮未在真机复现滚动回收/复用，过滤效果仍属静态 + 单测验证，不宣称真机已确认。
 - **FRS/吧内插入直播卡（AD-05）**：22.14.1.0 上由 `z88#s` 迁到 `a98#s`（参数 `v4f` → `c7f`），绑定后隐藏整卡；真机已确认锚点注册、AD-05 命中 `template_set_list`，尚未用可复现的 FRS/吧内插入直播卡确认过滤效果。
-- **信息流语音房/开播推荐卡（AD-05）**：issue #3 截图里的卡片由 `CardFeedVoiceRoomView#v` 渲染，22.14.1.0 参数由 `le9` → `re9`；绑定后隐藏整卡，真机已确认锚点注册，过滤效果仍需可复现卡片确认。
+- **信息流语音房/开播推荐卡（AD-05）**：issue #3 截图里的卡片由 `CardFeedVoiceRoomView#v` 渲染，22.14.1.0 参数由 `le9` → `re9`；22.15.1.1 另新增 `side_voice_room_bind`（`c0a#e`）覆盖 `SideVoiceRoomView`。绑定后隐藏整卡，真机已确认锚点注册，过滤效果仍需可复现卡片确认。
 - **AD-06 实时热点卡过滤**：sweep 已生效，但本次没有热点卡样本，实际隐藏未验证。
 
 - **一键签到需 EN-08 开启**：关闭 EN-08 时接收器忽略签到广播，设置页按钮提示“请先开启”；点击按钮不再静默改写开关。
